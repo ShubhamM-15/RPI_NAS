@@ -7,12 +7,13 @@ import time
 logger = logging.getLogger(__name__)
 
 class CameraHandler:
-    def __init__(self, captureStream, config):
+    def __init__(self, captureStream, config, debug=False):
         self.stream = captureStream
         self.config = config
         self.resolution = config['resolution_wh']
         self.fps = config['fps']
         self.captureWait = 1/self.fps
+        self.debug = debug
 
         self.maxMisses = 20
         self.bufferSize = self.fps * 1
@@ -20,10 +21,10 @@ class CameraHandler:
         self.storage = StorageHandler(config)
 
     def __setupCam(self, cam):
+        # TODO populate this for efficiency
         cam.set(cv2.CAP_PROP_BUFFERSIZE, 3)
-        cam.set(cv2.CAP_PROP_XI_TIMEOUT, 1)
 
-    def begin(self, debug=False):
+    def begin(self):
         # This is major camera loop that captures and saves
         logger.info("Initiating camera open")
         cam = cv2.VideoCapture(self.stream)
@@ -46,12 +47,8 @@ class CameraHandler:
         logger.info("Running loop for grab retrieve and dump...")
         errorCount = 0
         bufIndex = 0
+        ttime = 0
         while True:
-            atime = time.time()
-            if errorCount > self.maxMisses:
-                logger.fatal("Max Misses surpassed. exiting application")
-                cv2.destroyAllWindows()
-                return -1
             try:
                 if cam.isOpened():
                     stime = time.time()
@@ -60,14 +57,18 @@ class CameraHandler:
                         errorCount = 0
                         np.copyto(framebuffer[bufIndex], workFrame)
                         bufIndex += 1
+                        ttime += time.time()-stime
                         if bufIndex >= self.bufferSize:
                             logger.info("framebuffer overflow, dumping video now")
+                            logger.info(f"Effective fps: {self.bufferSize/ttime}")
                             bufIndex = 0
-                            # Signal storage to dump video here
+                            ttime = 0
+                            # TODO Signal storage to dump video here by dispatcher
 
-                        if debug:
-                            cv2.imshow("frames", workFrame)
-                        cv2.waitKey(max(1, self.captureWait - (time.time()-stime)))
+                        if self.debug:
+                            cv2.imshow("Frames", workFrame)
+                            cv2.waitKey(1)
+                        time.sleep(max(0.001, self.captureWait - (time.time()-stime)))
                     else:
                         errorCount += 1
                         logger.error("Camera closed while application was running")
@@ -77,4 +78,8 @@ class CameraHandler:
             except Exception as e:
                 errorCount += 1
                 logger.error(f"Capturing failed: {e}")
-            print(f"Time for one loop: {time.time()-atime}")
+            if errorCount > self.maxMisses:
+                logger.fatal("Max Misses surpassed. exiting application")
+                cv2.destroyAllWindows()
+                # TODO dump video if bufIndex != 0 in case of camera fatality
+                return -1

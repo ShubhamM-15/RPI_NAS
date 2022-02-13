@@ -37,7 +37,7 @@ def main():
 
         # Launching camera handler
         camHandle = CameraHandler(stream, config)
-        camHandle.begin(debug=True)
+        camHandle.begin()
         logger.error("Camera application crashed. Restarting")
 
 
