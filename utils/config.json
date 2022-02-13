@@ -1,5 +1,8 @@
 {
   "rstp_string": "http://{ip}:8080/video",
   "save_dir": "E:\\Workshop\\rstp_nas\\data_store",
-  "camera_mac": "20:A6:0C:90:AE:8E"
+  "camera_mac": "20:A6:0C:90:AE:8E",
+  "max_storage_gb": 10,
+  "resolution_wh": [1024, 768],
+  "fps": 30
 }
