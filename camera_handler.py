@@ -52,7 +52,7 @@ class CameraHandler:
             try:
                 if cam.isOpened():
                     stime = time.time()
-                    ret = cam.read(image=workFrame)
+                    ret, _ = cam.read(image=workFrame)
                     if ret:
                         errorCount = 0
                         np.copyto(framebuffer[bufIndex], workFrame)
