@@ -16,9 +16,8 @@ class CameraHandler:
         self.debug = debug
 
         self.maxMisses = 20
-        self.bufferSize = self.fps * 1
-
-        self.storage = StorageHandler(config)
+        self.storage = None
+        # TODO Implement L13 LED for status on RPI
 
     def __setupCam(self, cam):
         # TODO populate this for efficiency
@@ -37,17 +36,17 @@ class CameraHandler:
         # Prepare framebuffer
         ret, workFrame = cam.read()
         if ret:
-            framebuffer = []
-            for i in range(0, self.bufferSize):
-                framebuffer.append(np.zeros(workFrame.shape, dtype=np.uint8))
+            self.storage = StorageHandler(self.config, workFrame)
+            if not self.storage.isReady:
+                logger.fatal("Storage Handler initialization falied. restarting")
+                return False
+            logger.info("Camera Read Successful. Setup Done.")
         else:
             logger.error("Unable to capture frame from camera. exiting")
             return -1
 
         logger.info("Running loop for grab retrieve and dump...")
         errorCount = 0
-        bufIndex = 0
-        ttime = 0
         while True:
             try:
                 if cam.isOpened():
@@ -55,16 +54,7 @@ class CameraHandler:
                     ret, _ = cam.read(image=workFrame)
                     if ret:
                         errorCount = 0
-                        np.copyto(framebuffer[bufIndex], workFrame)
-                        bufIndex += 1
-                        ttime += time.time()-stime
-                        if bufIndex >= self.bufferSize:
-                            logger.info("framebuffer overflow, dumping video now")
-                            logger.info(f"Effective fps: {self.bufferSize/ttime}")
-                            bufIndex = 0
-                            ttime = 0
-                            # TODO Signal storage to dump video here by dispatcher
-
+                        self.storage.updateFrame(workFrame)
                         if self.debug:
                             cv2.imshow("Frames", workFrame)
                             cv2.waitKey(1)
@@ -81,5 +71,5 @@ class CameraHandler:
             if errorCount > self.maxMisses:
                 logger.fatal("Max Misses surpassed. exiting application")
                 cv2.destroyAllWindows()
-                # TODO dump video if bufIndex != 0 in case of camera fatality
+                self.storage.forceDump()
                 return -1

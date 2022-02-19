@@ -60,7 +60,8 @@ class DeviceFinder:
         return ip
 
 if __name__=="__main__":
-    mac = "20:A6:0C:90:AE:8E"
+    #mac = "20:A6:0C:90:AE:8E"
+    mac = "B4:B0:24:AD:96:66"
     ipHandler = DeviceFinder()
     ip = ipHandler.getIPofDevice(mac)
     if ip is None:

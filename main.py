@@ -31,7 +31,7 @@ def main():
         ip = deviceHandler.getIPofDevice(config['camera_mac'])
         if ip is None:
             logger.error(f"Unable to find ip of device with mac {config['camera_mac']}")
-            return -1
+            continue
         stream = config['rstp_string'].format(ip=ip)
         logger.info(f"Setting camera stream {stream}")
 
