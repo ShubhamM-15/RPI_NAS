@@ -26,6 +26,7 @@ class CameraHandler:
     def begin(self):
         # This is major camera loop that captures and saves
         logger.info("Initiating camera open")
+        # TODO How to get audio too ??
         cam = cv2.VideoCapture(self.stream)
         if cam is None or not cam.isOpened():
             logger.fatal(f"Unable to open camera at {self.stream}")
@@ -38,7 +39,7 @@ class CameraHandler:
         if ret:
             self.storage = StorageHandler(self.config, workFrame)
             if not self.storage.isReady:
-                logger.fatal("Storage Handler initialization falied. restarting")
+                logger.fatal("Storage Handler initialization failed: Unable to access storage directory.")
                 return False
             logger.info("Camera Read Successful. Setup Done.")
         else:
