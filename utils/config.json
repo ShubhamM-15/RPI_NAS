@@ -1,10 +1,10 @@
 {
-  "rstp_string": "http://{ip}:8080/video",
+  "rstp_string": "rtsp://mathur:home@124@{ip}:554/stream1",
   "save_dir": "E:\\Workshop\\rstp_nas\\data_store",
   "save_format": ".avi",
-  "camera_mac": "20:A6:0C:90:AE:8E",
+  "camera_mac": "B4:B0:24:AD:96:66",
   "max_storage_gb": 1,
   "clip_duration_minutes": 1,
-  "resolution_wh": [-1, -1],
+  "resolution_wh": [1920, 1080],
   "fps": 30
 }

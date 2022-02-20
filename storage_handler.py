@@ -121,6 +121,7 @@ class StorageHandler:
             self.storeMetaData[dname].append(fname)
 
     def updateFrame(self, frame):
+        # TODO optimize by keeping a buffer
         cspan = time.time() - self.clipStartTime
         if cspan >= self.exportDuration:
             self.fps = self.frameCounter/cspan

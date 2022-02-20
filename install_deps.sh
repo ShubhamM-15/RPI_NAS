@@ -18,7 +18,7 @@ mv opencv-4.2.0 opencv
 
 pip3 install numpy
 
-cd ~/opencv
+cd ./opencv
 mkdir build
 cd build
 
