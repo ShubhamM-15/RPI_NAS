@@ -5,8 +5,9 @@ import numpy as np
 import time
 from datetime import datetime
 import shutil
-import queue
+from utils.frame_queue import Queue
 from concurrent.futures import ThreadPoolExecutor
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class StorageHandler:
 
         self.executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix='export_handler')
         self.executor.submit(self.__exportHandler)
-        self.q = queue.Queue(maxsize=-1)
+        self.q = Queue(maxsize=20)
 
         os.makedirs(self.storePath, exist_ok=True)
         self.isReady = self.__checkStorage()
@@ -42,55 +43,55 @@ class StorageHandler:
 
     def __exportHandler(self):
         # This is a never ending Daemon worker
-        logger.info("executor thread export_handler")
-        frame = None
+        logger.info("export_handler: executor thread export_handler")
         if self.cvExport is None:
             self.frameCounter = 0
             self.clipStartTime = time.time()
             dname, fname = self.__getFileName()
             os.makedirs(os.path.join(self.storePath, dname), exist_ok=True)
             self.videoPath = os.path.join(self.storePath, dname, fname)
-            self.cvExport = cv2.VideoWriter(self.videoPath, cv2.VideoWriter_fourcc(*'H264'),
+            self.cvExport = cv2.VideoWriter(self.videoPath, cv2.VideoWriter_fourcc(*'MJPG'),
                                             self.fps, self.frameShape)
             # Update meta data
             if dname not in self.storeMetaData.keys():
                 self.storeMetaData[dname] = []
             self.storeMetaData[dname].append(fname)
         while True:
-            try:
-                frame = self.q.get(block=True, timeout=1)        # Wait for 3 seconds if frame is not available in q
-            except:
-                frame = None
-
-            if self.forceExport:
-                logger.info("export_handler forced to dump")
-                self.cvExport.write(frame)
-                self.cvExport.release()
-                logger.info("export_handler forced-dump done, terminating thread.")
-                self.forceExport = False
-                return True
-            else:
-                cspan = time.time() - self.clipStartTime
-                if cspan >= self.exportDuration:
-                    self.executor.submit(self.__handleStorage)
-                    logger.info(f"Executing save video with {self.frameCounter} frames at {self.fps} fps")
-                    self.fps = self.frameCounter / cspan
+            frame = self.q.dequeue(block=True, timeout=2)
+            if frame is not None:
+                if self.forceExport:
+                    logger.info("export_handler: export_handler forced to dump")
                     self.cvExport.write(frame)
                     self.cvExport.release()
-                    logger.info(f"video: {self.videoPath} saved successfully")
-                    self.frameCounter = 0
-                    self.clipStartTime = time.time()
-                    dname, fname = self.__getFileName()
-                    self.videoPath = os.path.join(self.storePath, dname, fname)
-                    self.cvExport = cv2.VideoWriter(self.videoPath, cv2.VideoWriter_fourcc(*'MJPG'),
-                                                    self.fps, self.frameShape)
-                    # Update meta data
-                    if dname not in self.storeMetaData.keys():
-                        self.storeMetaData[dname] = []
-                    self.storeMetaData[dname].append(fname)
+                    logger.info("export_handler: forced-dump done, terminating thread.")
+                    self.forceExport = False
+                    return True
                 else:
-                    self.cvExport.write(frame)
-                    self.frameCounter += 1
+                    cspan = time.time() - self.clipStartTime
+                    if cspan >= self.exportDuration:
+                        self.executor.submit(self.__handleStorage)
+                        logger.info(f"export_handler: Executing save video with {self.frameCounter} frames at {self.fps} fps")
+                        self.fps = self.frameCounter / cspan
+                        self.cvExport.write(frame)
+                        self.cvExport.release()
+                        logger.info(f"export_handler: video: {self.videoPath} saved successfully")
+                        self.frameCounter = 0
+                        self.clipStartTime = time.time()
+                        dname, fname = self.__getFileName()
+                        self.videoPath = os.path.join(self.storePath, dname, fname)
+                        self.cvExport = cv2.VideoWriter(self.videoPath, cv2.VideoWriter_fourcc(*'MJPG'),
+                                                        self.fps, self.frameShape)
+                        # Update meta data
+                        if dname not in self.storeMetaData.keys():
+                            self.storeMetaData[dname] = []
+                        self.storeMetaData[dname].append(fname)
+                    else:
+                        self.cvExport.write(frame)
+                        self.frameCounter += 1
+                del frame
+                gc.collect()
+            else:
+                logger.info("export_handler: dequeue frame timed out")
 
     def __checkStorage(self):
         t = np.zeros(self.frameShape, dtype=np.uint8)
@@ -158,7 +159,9 @@ class StorageHandler:
             logger.info(f"Deleted folder: {os.path.join(self.storePath, delDate)}")
 
     def updateFrame(self, frame: np.ndarray):
-        self.q.put(frame)
+        enqStat = self.q.enqueue(frame, block=True, timeout=2)
+        if not enqStat:
+            logger.error("Unable to enqueue frame for exporting, timed out")
 
     def forceDump(self):
         logger.info("Force dump initiated")
