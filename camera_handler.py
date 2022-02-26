@@ -38,19 +38,18 @@ class CameraHandler:
 
         # Prepare framebuffer
         ret, fetchFrame = cam.read()
-        workFrame = np.zeros((self.resolution[1], self.resolution[0], fetchFrame.shape[2]), dtype=np.uint8)
         if ret:
-            if fetchFrame.shape[:2][::-1] != self.resolution:
-                self.resize = True
-                cv2.resize(fetchFrame, dsize=self.resolution, dst=workFrame)
-            else:
+            if self.resolution[0] == -1 and self.resolution[1] == -1:
                 self.resize = False
-                np.copyto(workFrame, fetchFrame)
-            self.storage = StorageHandler(self.config, workFrame)
+                self.resolution = fetchFrame.shape[:2][::-1]
+            else:
+                self.resize = True
+                fetchFrame = cv2.resize(fetchFrame, dsize=self.resolution)
+            self.storage = StorageHandler(self.config, fetchFrame)
             if not self.storage.isReady:
                 logger.fatal("Storage Handler initialization failed: Unable to access storage directory.")
                 return False
-            logger.info("Camera Read Successful. Setup Done.")
+            logger.info(f"Camera Read Successful. Setup Done with resolution: {self.resolution}")
         else:
             logger.error("Unable to capture frame from camera. exiting")
             return -1
@@ -58,24 +57,19 @@ class CameraHandler:
         logger.info("Running loop for grab retrieve and dump...")
         errorCount = 0
         while True:
+            #t0 = time.time()
             try:
-                if cam.isOpened():
-                    stime = time.time()
-                    ret, _ = cam.read(image=fetchFrame)
-                    if self.resize:
-                        cv2.resize(fetchFrame, dsize=self.resolution, dst=workFrame)
-                    else:
-                        np.copyto(workFrame, fetchFrame)
-                    if ret:
-                        errorCount = 0
-                        self.storage.updateFrame(workFrame)
-                        if self.debug:
-                            cv2.imshow("Frames", workFrame)
-                            cv2.waitKey(1)
-                        time.sleep(max(0.001, self.captureWait - (time.time()-stime)))
-                    else:
-                        errorCount += 1
-                        logger.error("Camera closed while application was running")
+                stime = time.time()
+                ret, fetchFrame = cam.read()
+                if self.resize:
+                    fetchFrame = cv2.resize(fetchFrame, dsize=self.resolution)
+                if ret:
+                    errorCount = 0
+                    self.storage.updateFrame(fetchFrame)
+                    if self.debug:
+                        cv2.imshow("Frames", fetchFrame)
+                        cv2.waitKey(1)
+                    time.sleep(max(0.001, self.captureWait - (time.time()-stime)))
                 else:
                     errorCount += 1
                     logger.error("Camera closed while application was running")
@@ -87,3 +81,4 @@ class CameraHandler:
                 cv2.destroyAllWindows()
                 self.storage.forceDump()
                 return -1
+            #print(f'update time: {time.time() - t0} s')
