@@ -3,8 +3,8 @@
   "save_dir": "E:\\Workshop\\rstp_nas\\data_store",
   "save_format": ".mp4",
   "camera_mac": "B4:B0:24:AD:96:66",
-  "max_storage_gb": 10,
+  "max_storage_gb": 50,
   "clip_duration_minutes": 1,
   "resolution_wh": [-1, -1],
-  "fps": 30
+  "fps": 15
 }

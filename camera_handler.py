@@ -34,13 +34,11 @@ class CameraHandler:
         while True:
             try:
                 ret, fetchFrame = self.cam.read()
-                if self.resize:
-                    cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
                 if ret:
+                    if self.resize:
+                        cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
                     errorCount = 0
-                    enqued = self.q.enqueue(fetchFrame, block=True, timeout=2)
-                    if not enqued:
-                        logger.error("camera_daemon: Unable to enqueue frame")
+                    enqued = self.q.enqueue(fetchFrame, block=False)
                 else:
                     errorCount += 1
                     logger.error("camera_daemon: Camera closed while application was running")
@@ -64,19 +62,21 @@ class CameraHandler:
         self.cam = cv2.VideoCapture(self.stream)
         if self.cam is None or not self.cam.isOpened():
             logger.fatal(f"Unable to open camera at {self.stream}")
-            return -1
+            return False
         logger.info(f"Camera opened at {self.stream} running application")
         self.__setupCam()
 
         # Prepare framebuffer
         ret, fetchFrame = self.cam.read()
         if ret:
+            logger.info(f'Camera stream running at resolution: {fetchFrame.shape}')
             self.chn = fetchFrame.shape[2]
             if self.resolution[0] == -1 and self.resolution[1] == -1:
                 self.resize = False
                 self.resolution = fetchFrame.shape[:2][::-1]
             else:
                 self.resize = True
+                logger.info(f'Resizing Enabled')
                 cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
             self.storage = StorageHandler(self.config, fetchFrame)
             if not self.storage.isReady:
@@ -85,24 +85,33 @@ class CameraHandler:
             logger.info(f"Camera Read Successful. Setup Done with resolution: {self.resolution}")
         else:
             logger.error("Unable to capture frame from camera. exiting")
-            return -1
+            return False
 
         # Launch camera daemon
         self.executor.submit(self.__frameCatchDaemon)
         self.camStatus = True
 
+        errorCount = 0
         while self.camStatus:
-            try:
-                stime = time.time()
-                fetchFrame = self.q.dequeue(block=True, timeout=2)
-                if fetchFrame is None:
-                    logger.error("unable to fetch frame from camera_daemon, timed out")
-                    continue
-                if self.resize:
-                    cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
-                self.storage.updateFrame(fetchFrame)
-                del fetchFrame
-                gc.collect()
-                #print(f'update time: {time.time() - stime} s')
-            except Exception as e:
-                logger.error('unable to get frame from queue')
+            fetchFrame = self.q.dequeue(block=True, timeout=2)
+            if fetchFrame is None:
+                logger.error("unable to dequeue frame from camera_daemon, timed out")
+                errorCount += 1
+                continue
+            if self.resize:
+                cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
+            updated = self.storage.updateFrame(fetchFrame)
+            if updated:
+                errorCount = 0
+            del fetchFrame
+            gc.collect()
+            if errorCount >= self.maxMisses:
+                logging.fatal("Camera loop: max error count surpassed. Breaking")
+                self.camStatus = False
+                break
+
+        # Force dump
+        self.storage.forceDump()
+        self.executor.shutdown(wait=True)
+        logger.info("Exiting camera handler")
+

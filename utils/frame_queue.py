@@ -1,9 +1,13 @@
 import time
+import math
 class Queue:
     def __init__(self, maxsize=5, recheck_time=0.001):
         self.queue = []
         self.nElem = 0
-        self.maxsize = maxsize
+        if maxsize <= 0 or maxsize is None:
+            self.maxsize = math.inf
+        else:
+            self.maxsize = maxsize
         self.rchk = recheck_time
 
     def enqueue(self, item, block=False, timeout=None):
