@@ -92,17 +92,16 @@ class CameraHandler:
         self.camStatus = True
 
         while self.camStatus:
-            try:
-                stime = time.time()
-                fetchFrame = self.q.dequeue(block=True, timeout=2)
-                if fetchFrame is None:
-                    logger.error("unable to fetch frame from camera_daemon, timed out")
-                    continue
-                if self.resize:
-                    cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
-                self.storage.updateFrame(fetchFrame)
-                del fetchFrame
-                gc.collect()
-                #print(f'update time: {time.time() - stime} s')
-            except Exception as e:
-                logger.error('unable to get frame from queue')
+
+            fetchFrame = self.q.dequeue(block=True, timeout=2)
+            if fetchFrame is None:
+                logger.error("unable to dequeue frame from camera_daemon, timed out")
+                continue
+            if self.resize:
+                cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
+            stime = time.time()
+            self.storage.updateFrame(fetchFrame)
+            print(f'update time: {time.time() - stime} s')
+            del fetchFrame
+            gc.collect()
+
