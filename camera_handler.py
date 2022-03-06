@@ -4,7 +4,7 @@ from storage_handler import StorageHandler
 import cv2
 import logging
 import time
-from utils.frame_queue import Queue
+from queue import Queue
 import gc
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,10 @@ class CameraHandler:
         self.captureWait = 1/self.fps
         self.debug = debug
 
-        self.maxMisses = 20
+        self.maxMisses = 10
         self.storage = None
 
-        self.q = Queue(maxsize=5)
+        self.q = Queue(maxsize=1)
         self.cam = None
         self.camStatus = False
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_daemon')
@@ -38,7 +38,10 @@ class CameraHandler:
                     if self.resize:
                         cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
                     errorCount = 0
-                    enqued = self.q.enqueue(fetchFrame, block=False)
+                    try:
+                        self.q.put(fetchFrame, block=False)
+                    except:
+                        pass
                 else:
                     errorCount += 1
                     logger.error("camera_daemon: Camera closed while application was running")
@@ -51,9 +54,9 @@ class CameraHandler:
                 return False
 
     def __setupCam(self):
-        self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 3)
-        self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
-        self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+        self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        #self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
+        #self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
 
     def begin(self):
         # This is major camera loop that captures and saves
@@ -93,18 +96,20 @@ class CameraHandler:
 
         errorCount = 0
         while self.camStatus:
-            fetchFrame = self.q.dequeue(block=True, timeout=2)
-            if fetchFrame is None:
+            try:
+                fetchFrame = self.q.get(block=True, timeout=1)
+            except:
                 logger.error("unable to dequeue frame from camera_daemon, timed out")
                 errorCount += 1
-                continue
-            if self.resize:
-                cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
-            updated = self.storage.updateFrame(fetchFrame)
-            if updated:
-                errorCount = 0
-            del fetchFrame
-            gc.collect()
+                fetchFrame = None
+            if fetchFrame is not None:
+                if self.resize:
+                    cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
+                updated = self.storage.updateFrame(fetchFrame)
+                if updated:
+                    errorCount = 0
+                del fetchFrame
+                gc.collect()
             if errorCount >= self.maxMisses:
                 logging.fatal("Camera loop: max error count surpassed. Breaking")
                 self.camStatus = False
