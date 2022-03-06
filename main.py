@@ -5,18 +5,18 @@ from logging.handlers import RotatingFileHandler
 from utils.find_devices import DeviceFinder
 from camera_handler import CameraHandler
 import time
+import sys
 
-log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-my_handler = RotatingFileHandler("debug_logs.log", mode='a', maxBytes=5*1024*1024, backupCount=2, encoding=None, delay=0)
+file_handler = RotatingFileHandler(filename='debug_logs.log', mode='a', maxBytes=5 * 1024 * 1024, backupCount=2, encoding=None, delay=0)
+stdout_handler = logging.StreamHandler(sys.stdout)
+handlers = [file_handler, stdout_handler]
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(filename)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("debug_logs.log"),
-        logging.StreamHandler()
-    ]
+    format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
+    handlers=handlers
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('LOGGER_NAME')
 
 def main():
     # Reading Config
