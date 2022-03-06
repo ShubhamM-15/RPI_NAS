@@ -1,10 +1,13 @@
 import json
 import os
 import logging.config
+from logging.handlers import RotatingFileHandler
 from utils.find_devices import DeviceFinder
 from camera_handler import CameraHandler
 import time
 
+log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
+my_handler = RotatingFileHandler("debug_logs.log", mode='a', maxBytes=5*1024*1024, backupCount=2, encoding=None, delay=0)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(filename)s [%(levelname)s] %(message)s",
