@@ -7,7 +7,8 @@ from camera_handler import CameraHandler
 import time
 import sys
 
-file_handler = RotatingFileHandler(filename='debug_logs.log', mode='a', maxBytes=5 * 1024 * 1024, backupCount=2, encoding=None, delay=0)
+logPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_logs.log")
+file_handler = RotatingFileHandler(logPath, mode='a', maxBytes=5 * 1024 * 1024, backupCount=2, encoding=None, delay=0)
 stdout_handler = logging.StreamHandler(sys.stdout)
 handlers = [file_handler, stdout_handler]
 

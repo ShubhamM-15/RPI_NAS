@@ -26,7 +26,6 @@ class CameraHandler:
         self.cam = None
         self.camStatus = False
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_daemon')
-        # TODO Implement L13 LED for status on RPI
 
     def __frameCatchDaemon(self):
         logger.info("camera_daemon: Running loop for grab retrieve and dump...")
@@ -54,7 +53,7 @@ class CameraHandler:
                 return False
 
     def __setupCam(self):
-        self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 3)
+        self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         #self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
         #self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
 
