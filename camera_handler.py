@@ -28,9 +28,10 @@ class CameraHandler:
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_daemon')
 
     def __frameCatchDaemon(self):
+        self.camStatus = True
         logger.info("camera_daemon: Running loop for grab retrieve and dump...")
         errorCount = 0
-        while True:
+        while self.camStatus:
             try:
                 ret, fetchFrame = self.cam.read()
                 if ret:
@@ -89,7 +90,6 @@ class CameraHandler:
 
         # Launch camera daemon
         self.executor.submit(self.__frameCatchDaemon)
-        self.camStatus = True
 
         errorCount = 0
         while self.camStatus:
@@ -117,5 +117,5 @@ class CameraHandler:
         # Force dump
         self.storage.forceDump()
         self.executor.shutdown(wait=True)
-        logger.info("Exiting camera handler")
+        logger.error("Exiting camera handler")
 
