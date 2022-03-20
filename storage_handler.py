@@ -89,6 +89,7 @@ class StorageHandler:
                     self.frameCounter = 0
                     self.clipStartTime = time.time()
                     dname, fname = self.__getFileName()
+                    os.makedirs(os.path.join(self.storePath, dname), exist_ok=True)
                     self.videoPath = os.path.join(self.storePath, dname, fname)
                     self.cvExport = cv2.VideoWriter(self.videoPath, cv2.VideoWriter_fourcc(*self.videoCodec),
                                                     self.fps, self.frameShape)
@@ -139,6 +140,9 @@ class StorageHandler:
                 for it in os.scandir(os.path.join(self.storePath, date)):
                     if it.is_file():
                         files.append(os.path.split(it.path)[-1])
+                if len(files) == 0:
+                    os.remove(os.path.join(self.storePath, date))
+                    continue
                 files.sort(key=lambda file: datetime.strptime(file.split('.')[0], '%H_%M_%S'))
 
                 # Adding to datamap queue
