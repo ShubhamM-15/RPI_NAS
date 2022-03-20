@@ -1,18 +1,23 @@
 import json
 import os
 import logging.config
+from logging.handlers import RotatingFileHandler
 from utils.find_devices import DeviceFinder
 from camera_handler import CameraHandler
+import time
+import sys
+
+logPath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_logs.log")
+file_handler = RotatingFileHandler(logPath, mode='a', maxBytes=5 * 1024 * 1024, backupCount=2, encoding=None, delay=0)
+stdout_handler = logging.StreamHandler(sys.stdout)
+handlers = [file_handler, stdout_handler]
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(filename)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("debug_logs.log"),
-        logging.StreamHandler()
-    ]
+    format='[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s',
+    handlers=handlers
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('LOGGER_NAME')
 
 def main():
     # Reading Config
@@ -31,6 +36,8 @@ def main():
         ip = deviceHandler.getIPofDevice(config['camera_mac'])
         if ip is None:
             logger.error(f"Unable to find ip of device with mac {config['camera_mac']}")
+            logging.info('Waiting for 10 seconds to restart')
+            time.sleep(10)
             continue
         stream = config['rstp_string'].format(ip=ip)
         logger.info(f"Setting camera stream {stream}")
