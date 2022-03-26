@@ -35,10 +35,9 @@ def main():
         deviceHandler = DeviceFinder()
         ip = deviceHandler.getIPofDevice(config['camera_mac'])
         if ip is None:
-            logger.error(f"Unable to find ip of device with mac {config['camera_mac']}")
-            logging.info('Waiting for 10 seconds to restart')
-            time.sleep(10)
-            continue
+            logger.fatal(f"Unable to find ip of device with mac {config['camera_mac']}")
+            logger.fatal("Exiting Python Application")
+            return -1
         stream = config['rstp_string'].format(ip=ip)
         logger.info(f"Setting camera stream {stream}")
 
