@@ -106,6 +106,8 @@ class CameraHandler:
         self.storage = StorageHandler(self.config, fetchFrame)
         if not self.storage.isReady:
             logger.fatal("Storage Handler initialization failed: Unable to access storage directory.")
+            self.camStatus.set(False)
+            self.executor.shutdown(wait=True)
             return False
 
         # Run update loop in camera

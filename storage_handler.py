@@ -38,6 +38,7 @@ class StorageHandler:
         os.makedirs(self.storePath, exist_ok=True)
         self.isReady = self.__checkStorage()
         self.isReady = self.isReady and self.__prepareStoreMetaData()
+        self.__handleStorage()
         if self.isReady:
             self.executor.submit(self.__exportHandler)
             logger.info("Storage Handler launched and ready")
@@ -141,7 +142,9 @@ class StorageHandler:
                     if it.is_file():
                         files.append(os.path.split(it.path)[-1])
                 if len(files) == 0:
-                    os.remove(os.path.join(self.storePath, date))
+                    dirPath = os.path.join(self.storePath, date)
+                    os.removedirs(dirPath)
+                    logger.info(f"Deleted Empty Directory: {dirPath}")
                     continue
                 files.sort(key=lambda file: datetime.strptime(file.split('.')[0], '%H_%M_%S'))
 
@@ -173,8 +176,12 @@ class StorageHandler:
             for _ in range(self.filePurgeBatch):
                 try:
                     path = self.storeMetaData.get(block=False)
+                    dirPath = os.path.dirname(path)
                     os.remove(path)
                     logger.info(f"Deleted file: {path}")
+                    if len(os.listdir(dirPath)) == 0:
+                        os.removedirs(dirPath)
+                        logger.info(f"Deleted Folder: {dirPath}")
                 except:
                     pass
             used = self.__findStoreSize()
