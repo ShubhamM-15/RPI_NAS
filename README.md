@@ -29,7 +29,8 @@ config information:
 
 NOTE:
 Be very carefull while adding run.sh to rc.local as run.sh is running in a loop that restarts system after consecutive failures.
-Also this run needs to be decoupled from rc.local as this might block the bootup process and render pi unaccessible.
+Also this run needs to be decoupled from rc.local as this might block the bootup process and render pi unaccessible. 
+Make sure run.sh has executable premissions, if not use chmod 777 on it.
 
 nohup command >/dev/null 2>&1 &
 
