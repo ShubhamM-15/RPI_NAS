@@ -34,4 +34,4 @@ Make sure run.sh has executable premissions, if not use chmod 777 on it.
 
 nohup command >/dev/null 2>&1 &
 
-command here is python3 <absolute path of run.sh>
+command here is python3 {absolute path of run.sh}
