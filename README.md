@@ -26,3 +26,9 @@ config information:
 7) clip_duration_minutes: Time duration of each clip from camera.
 8) resolution_wh: Resolution of frames to be saved. keep it [-1, -1] for default from camera stream.
 9) fps: FPS supported by camera. It will be auto-adjusted by application during runtime.
+
+NOTE:
+Be very carefull while adding run.sh to rc.local as run.sh is running in a loop that restarts system after consecutive failures.
+Also this run needs to be decoupled from rc.local as this might block the bootup process and render pi unaccessible.
+nohup command >/dev/null 2>&1 &
+command here is python3 <absolute path of run.sh>
