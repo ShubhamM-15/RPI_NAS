@@ -1,12 +1,46 @@
-import numpy as np
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
 from storage_handler import StorageHandler
 import cv2
 import logging
-import time
-from utils.frame_queue import Queue
 import gc
 logger = logging.getLogger(__name__)
+
+
+def setupCam(cam):
+    cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+def frameCatchDaemon(stream, frameQueue, camStatus):
+    logger = logging.getLogger(__name__)
+    logger.info("CameraProcess: Camera Process Initiated")
+
+    cam = cv2.VideoCapture(stream)
+    if cam is None or not cam.isOpened():
+        logger.fatal("CameraProcess: Unable to open camera stream. Exiting.")
+        return False
+    setupCam(cam)
+    camStatus.set(True)
+    logger.info("CameraProcess: Camera setup done. Running capture...")
+
+    errorCount = 0
+    while camStatus.get():
+        try:
+            ret, fetchFrame = cam.read()
+            if ret:
+                errorCount = 0
+                try:
+                    frameQueue.put(fetchFrame, block=False)
+                except:
+                    pass
+            else:
+                errorCount += 1
+        except Exception as e:
+            errorCount += 1
+        if errorCount > 10:
+            camStatus.set(False)
+            logger.info("CameraProcess: Max errors surpassed. Exiting.")
+            return False
 
 class CameraHandler:
     def __init__(self, captureStream, config, debug=False):
@@ -19,89 +53,89 @@ class CameraHandler:
         self.captureWait = 1/self.fps
         self.debug = debug
 
-        self.maxMisses = 20
+        self.maxMisses = 10
         self.storage = None
 
-        self.q = Queue(maxsize=5)
         self.cam = None
-        self.camStatus = False
-        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_daemon')
-        # TODO Implement L13 LED for status on RPI
-
-    def __frameCatchDaemon(self):
-        logger.info("camera_daemon: Running loop for grab retrieve and dump...")
-        errorCount = 0
-        while True:
-            try:
-                ret, fetchFrame = self.cam.read()
-                if self.resize:
-                    cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
-                if ret:
-                    errorCount = 0
-                    enqued = self.q.enqueue(fetchFrame, block=True, timeout=2)
-                    if not enqued:
-                        logger.error("camera_daemon: Unable to enqueue frame")
-                else:
-                    errorCount += 1
-                    logger.error("camera_daemon: Camera closed while application was running")
-            except Exception as e:
-                errorCount += 1
-                logger.error(f"camera_daemon: Capturing failed: {e}")
-            if errorCount > self.maxMisses:
-                logger.fatal("camera_daemon: Max Misses surpassed. exiting application")
-                self.camStatus = False
-                return False
-
-    def __setupCam(self):
-        self.cam.set(cv2.CAP_PROP_BUFFERSIZE, 3)
-        self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
-        self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+        self.manager = multiprocessing.Manager()
+        self.q = self.manager.Queue(maxsize=1)
+        self.camStatus = self.manager.Value('i', False)
+        self.executor = ProcessPoolExecutor(max_workers=1)
 
     def begin(self):
-        # This is major camera loop that captures and saves
+        # Test camera setup and validate
         logger.info("Initiating camera open")
-        # TODO How to get audio too ??
         self.cam = cv2.VideoCapture(self.stream)
         if self.cam is None or not self.cam.isOpened():
             logger.fatal(f"Unable to open camera at {self.stream}")
-            return -1
+            return False
         logger.info(f"Camera opened at {self.stream} running application")
-        self.__setupCam()
 
-        # Prepare framebuffer
         ret, fetchFrame = self.cam.read()
         if ret:
+            logger.info(f'Camera stream running at resolution: {fetchFrame.shape}')
             self.chn = fetchFrame.shape[2]
             if self.resolution[0] == -1 and self.resolution[1] == -1:
                 self.resize = False
                 self.resolution = fetchFrame.shape[:2][::-1]
             else:
                 self.resize = True
+                logger.info(f'Resizing Enabled')
                 cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
-            self.storage = StorageHandler(self.config, fetchFrame)
-            if not self.storage.isReady:
-                logger.fatal("Storage Handler initialization failed: Unable to access storage directory.")
-                return False
             logger.info(f"Camera Read Successful. Setup Done with resolution: {self.resolution}")
         else:
             logger.error("Unable to capture frame from camera. exiting")
-            return -1
+            return False
+        self.cam.release()
 
         # Launch camera daemon
-        self.executor.submit(self.__frameCatchDaemon)
-        self.camStatus = True
+        self.executor.submit(frameCatchDaemon, self.stream, self.q, self.camStatus)
+        logger.info("Waiting for camera thread to initiate")
+        waitCycles=0
+        while not self.camStatus.get():
+            time.sleep(1)
+            waitCycles += 1
+            if waitCycles >= 10:
+                logger.fatal("Camera Process not started yet!!")
+                self.camStatus.set(False)
+                self.executor.shutdown(wait=True)
+                logger.error("Camera Process failed. Exiting application.")
+                return False
 
-        while self.camStatus:
+        # Prepare storage handler
+        self.storage = StorageHandler(self.config, fetchFrame)
+        if not self.storage.isReady:
+            logger.fatal("Storage Handler initialization failed: Unable to access storage directory.")
+            self.camStatus.set(False)
+            self.executor.shutdown(wait=True)
+            return False
 
-            fetchFrame = self.q.dequeue(block=True, timeout=2)
-            if fetchFrame is None:
+        # Run update loop in camera
+        errorCount = 0
+        while self.camStatus.get():
+            try:
+                fetchFrame = self.q.get(block=True, timeout=1)
+            except:
                 logger.error("unable to dequeue frame from camera_daemon, timed out")
-                continue
-            if self.resize:
-                cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
-            stime = time.time()
-            self.storage.updateFrame(fetchFrame)
-            print(f'update time: {time.time() - stime} s')
-            del fetchFrame
-            gc.collect()
+                errorCount += 1
+                fetchFrame = None
+            if fetchFrame is not None:
+                if self.resize:
+                    cv2.resize(fetchFrame, dsize=self.resolution, dst=fetchFrame)
+                updated = self.storage.updateFrame(fetchFrame)
+                if updated:
+                    errorCount = 0
+                else:
+                    errorCount += 1
+                del fetchFrame
+                gc.collect()
+            if errorCount >= self.maxMisses:
+                logging.fatal("Camera loop: max error count surpassed. Breaking")
+                self.camStatus.set(False)
+                break
+
+        # Force dump
+        self.storage.forceDump()
+        self.executor.shutdown(wait=True)
+        logger.error("Exiting camera handler")
 
