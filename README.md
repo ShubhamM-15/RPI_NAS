@@ -30,5 +30,7 @@ config information:
 NOTE:
 Be very carefull while adding run.sh to rc.local as run.sh is running in a loop that restarts system after consecutive failures.
 Also this run needs to be decoupled from rc.local as this might block the bootup process and render pi unaccessible.
+
 nohup command >/dev/null 2>&1 &
+
 command here is python3 <absolute path of run.sh>
